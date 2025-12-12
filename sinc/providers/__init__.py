@@ -1,0 +1,1 @@
+# SINC External Provider Adapters

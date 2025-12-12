@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --vault-black: #0A0A0A;
+  --vault-dark: #111111;
+  --vault-border: #1A1A1A;
+  --vault-muted: #666666;
+  --vault-text: #E5E5E5;
+  --vault-white: #FAFAFA;
+  --vault-accent: #C4A052;
+  --vault-gold: #D4AF37;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background-color: var(--vault-black);
+  color: var(--vault-text);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+::selection {
+  background-color: var(--vault-accent);
+  color: var(--vault-black);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vault-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vault-border);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vault-muted);
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 1px solid var(--vault-accent);
+  outline-offset: 2px;
+}
+
+/* Custom audio player */
+audio::-webkit-media-controls-panel {
+  background-color: var(--vault-dark);
+}
+
+/* Vault animations */
+@keyframes vault-pulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.vault-pulse {
+  animation: vault-pulse 3s ease-in-out infinite;
+}
+
+/* Letter spacing for headers */
+.vault-title {
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.vault-subtitle {
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
