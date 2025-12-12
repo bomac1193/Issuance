@@ -9,7 +9,7 @@ issuance/
 ├── frontend/          # Next.js + TypeScript + Tailwind + Framer Motion
 ├── backend/           # FastAPI + SQLite
 ├── sinc/              # SINC fingerprinting engine (Python)
-├── contracts/         # Solidity smart contract (Polygon)
+├── contracts/         # Solidity smart contracts (Polygon)
 └── shared/            # Shared TypeScript types
 ```
 
@@ -31,10 +31,10 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # Start server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-Backend runs at: http://localhost:8000
+Backend runs at: http://localhost:8001
 
 ### 2. Frontend
 
@@ -50,7 +50,7 @@ npm run dev
 
 Frontend runs at: http://localhost:3001
 
-### 3. Smart Contract (Optional)
+### 3. Smart Contracts (Optional)
 
 ```bash
 cd contracts
@@ -61,13 +61,14 @@ npm install
 # Start local blockchain
 npm run node
 
-# In another terminal, deploy contract
-npm run deploy:local
+# In another terminal, deploy all contracts
+npm run deploy:all:local
 ```
 
-Copy the contract address to `backend/.env`:
+Copy the contract addresses to `backend/.env`:
 ```
 CONTRACT_ADDRESS=0x...
+FRACTIONS_CONTRACT_ADDRESS=0x...
 PRIVATE_KEY=0x...  # From Hardhat accounts
 ```
 
@@ -80,37 +81,46 @@ Use one of these invitation tokens:
 
 Or use the passphrase: `SOUND IS ISSUED`
 
-## Flows
+## Features
 
-### Landing → Registry
-1. Open http://localhost:3001
-2. Click "Enter"
-3. Enter invitation token
-4. View registry of issued assets
-
-### Issue Sound (Hidden)
-1. Navigate to http://localhost:3001/issue
+### Ceremony Flow (Issue Sound)
+1. Navigate to http://localhost:3001/ceremony
 2. Upload audio file (WAV, MP3, FLAC, AIFF, M4A)
-3. Fill in metadata
-4. Click "Issue Sound"
-5. SINC processes the audio:
-   - Extracts duration
-   - Computes fingerprint hash
-   - Checks against external providers (stubbed)
-   - Assigns risk score and clearance status
-6. If CLEARED, registers on blockchain (if configured)
+3. Fill in metadata (title, artist, year, edition, settlement rule)
+4. SINC verifies the audio:
+   - Generates fingerprint hash
+   - Checks rights clearance
+   - Prepares blockchain registration
+5. Issue to blockchain
 
-### Asset Playback → Settlement
-1. View asset detail page
-2. Play audio to completion
-3. Settlement event created
-4. Asset status updates to SETTLED
+### Settlement
+- **IMMEDIATE**: Settles upon issuance
+- **ON_FIRST_PLAY**: Settles when played for the first time
+- **ON_TRANSFER**: Settles when ownership transfers
+- **CUSTOM**: Define custom settlement logic
+
+### Fractional Ownership (ERC-1155)
+- Enable fractionalization for cleared assets
+- Split into 2-10,000 tradeable fractions
+- Secondary market trading on Polygon
+- Automatic ownership percentage tracking
+
+### KYC/AML Compliance
+- Required for fractionalized assets
+- Required for high-value transactions (>$10,000)
+- Country restrictions for sanctioned jurisdictions
+- Verification levels: Basic, Enhanced
 
 ## API Endpoints
 
+### Authentication
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | /api/auth/validate | Validate invitation token |
+
+### Assets
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | /api/assets | List all assets |
 | GET | /api/assets/:id | Get single asset |
 | POST | /api/assets/issue | Issue new asset (multipart) |
@@ -119,43 +129,54 @@ Or use the passphrase: `SOUND IS ISSUED`
 | POST | /api/assets/:id/settlement | Create settlement event |
 | GET | /api/assets/:id/settlements | Get settlement events |
 
+### Fractional Ownership
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /api/assets/:id/fractionalize | Fractionalize an asset |
+| GET | /api/assets/:id/fractions | Get fraction holdings |
+
+### KYC/AML
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /api/kyc/submit | Submit KYC verification |
+| GET | /api/kyc/:wallet | Get KYC status |
+| POST | /api/kyc/:wallet/verify | Verify KYC (admin) |
+
+## Smart Contracts
+
+### IssuanceRegistry.sol
+Main registry for sound assets on Polygon.
+
+```solidity
+function registerAsset(uint256 assetId, bytes32 fingerprintHash, address owner, uint8 consentFlags)
+function getAsset(uint256 assetId) returns (bytes32, address, uint8, uint256)
+function transferOwnership(uint256 assetId, address newOwner)
+function updateConsent(uint256 assetId, uint8 newFlags)
+```
+
+### IssuanceFractions.sol (ERC-1155)
+Fractional ownership contract.
+
+```solidity
+function fractionalizeAsset(uint256 assetId, uint256 totalFractions, uint256 pricePerFraction, bytes32 fingerprintHash)
+function purchaseFractions(uint256 assetId, uint256 amount)
+function listFractions(uint256 assetId, uint256 amount, uint256 pricePerFraction)
+function buyFromListing(uint256 assetId, uint256 listingId, uint256 amount)
+function getOwnershipPercentage(uint256 assetId, address holder) returns (uint256)
+```
+
 ## SINC Engine
 
 The Sound Identification & Normalization Core (SINC) provides:
 
 - **Fingerprinting**: MFCC-based audio fingerprint → SHA256 hash
 - **Duration detection**: Accurate audio length extraction
-- **Risk scoring**: External provider checks (stubbed)
+- **Risk scoring**: External provider checks
 - **Clearance status**: UNCHECKED → CLEARED / FLAGGED
 
 External provider adapters (stubs):
 - `sinc/providers/audible_magic.py`
 - `sinc/providers/pex.py`
-
-## Smart Contract
-
-`IssuanceRegistry.sol` on Polygon:
-
-```solidity
-function registerAsset(
-    uint256 assetId,
-    bytes32 fingerprintHash,
-    address owner,
-    uint8 consentFlags
-) external;
-
-function getAsset(uint256 assetId) external view returns (
-    bytes32 fingerprintHash,
-    address owner,
-    uint8 consentFlags,
-    uint256 timestamp
-);
-```
-
-Events:
-- `AssetIssued(assetId, fingerprintHash, owner, timestamp)`
-- `OwnershipTransferred(assetId, previousOwner, newOwner)`
-- `ConsentUpdated(assetId, previousFlags, newFlags)`
 
 ## Design
 
@@ -178,11 +199,29 @@ The vault UI follows these principles:
 - clearance_status: UNCHECKED | CLEARED | FLAGGED
 - risk_score (0-1)
 - fingerprint_hash (SHA256)
-- verification ("SOVN Clean")
+- verification ("ISSUANCE Clean")
 - chain_tx_hash
+- is_fractionalized, fraction_count, fractions_tx_hash
+
+### FractionHolding
+- asset_id, holder_address, holder_label
+- fraction_amount, percentage
+
+### KYCRecord
+- wallet_address, status, verification_level
+- country_code, verified_at
 
 ### CustodyEvent
 - asset_id, from_holder_label, to_holder_label, occurred_at
 
 ### SettlementEvent
 - asset_id, kind (PLAY | TRANSFER), occurred_at
+
+## Pages
+
+- `/` - Landing page with invitation
+- `/registry` - Asset registry listing
+- `/ceremony` - Issue new sound asset
+- `/asset/[id]` - Asset detail with player
+- `/settlement/[id]` - Settlement management
+- `/issue` - Legacy issue page (hidden)

@@ -4,10 +4,11 @@ import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useParams } from 'next/navigation';
 import { VaultHeader } from '@/components/VaultHeader';
+import { FractionalOwnership } from '@/components/FractionalOwnership';
 import { getAsset, getCustodyChain, createSettlement, getAudioUrl } from '@/lib/api';
 import { formatDuration, formatDate, truncateHash } from '@/lib/utils';
 import { Asset, CustodyEvent } from '@/types';
-import { Play, Pause, Volume2, ExternalLink } from 'lucide-react';
+import { Play, Pause, Volume2, ExternalLink, Settings } from 'lucide-react';
 
 export default function AssetDetailPage() {
   const router = useRouter();
@@ -318,7 +319,7 @@ export default function AssetDetailPage() {
 
           {/* Fingerprint & Chain */}
           <motion.div
-            className="p-6 border border-vault-border"
+            className="p-6 border border-vault-border mb-6"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
@@ -372,6 +373,39 @@ export default function AssetDetailPage() {
                 </div>
               )}
             </dl>
+          </motion.div>
+
+          {/* Fractional Ownership */}
+          {asset.clearance_status === 'CLEARED' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+              className="mb-6"
+            >
+              <FractionalOwnership
+                assetId={asset.id}
+                isFragmentalized={asset.is_fractionalized}
+                fractionCount={asset.fraction_count}
+                onFractionalize={loadAsset}
+              />
+            </motion.div>
+          )}
+
+          {/* Settlement Link */}
+          <motion.div
+            className="text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+          >
+            <button
+              onClick={() => router.push(`/settlement/${asset.id}`)}
+              className="inline-flex items-center gap-2 text-sm text-vault-muted hover:text-vault-accent transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              Settlement Details
+            </button>
           </motion.div>
         </div>
       </main>

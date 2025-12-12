@@ -46,6 +46,9 @@ class AssetResponse(BaseModel):
     fingerprint_hash: Optional[str]
     verification: str
     chain_tx_hash: Optional[str]
+    is_fractionalized: bool = False
+    fraction_count: Optional[int] = None
+    fractions_tx_hash: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -92,3 +95,36 @@ class SINCResult(BaseModel):
     duration_seconds: float
     risk_score: float
     clearance_status: str
+
+
+class FractionHoldingResponse(BaseModel):
+    id: int
+    asset_id: int
+    holder_address: str
+    holder_label: Optional[str]
+    fraction_amount: int
+    percentage: float
+    acquired_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FractionalizeRequest(BaseModel):
+    fraction_count: int = Field(ge=2, le=10000)
+    price_per_fraction: Optional[float] = None
+
+
+class KYCSubmit(BaseModel):
+    wallet_address: str
+    country_code: str
+
+
+class KYCResponse(BaseModel):
+    wallet_address: str
+    status: str
+    verification_level: int
+    verified_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True

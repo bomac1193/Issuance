@@ -39,14 +39,19 @@ class Asset(Base):
     clearance_status = Column(String(50), default=ClearanceStatus.UNCHECKED.value)
     risk_score = Column(Float, nullable=True)
     fingerprint_hash = Column(String(64), nullable=True)
-    verification = Column(String(100), default="SOVN Clean")
+    verification = Column(String(100), default="ISSUANCE Clean")
     chain_tx_hash = Column(String(66), nullable=True)
     file_path = Column(String(500), nullable=True)
+    # Fractional ownership
+    is_fractionalized = Column(Integer, default=0)
+    fraction_count = Column(Integer, nullable=True)
+    fractions_tx_hash = Column(String(66), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     custody_events = relationship("CustodyEvent", back_populates="asset")
     settlement_events = relationship("SettlementEvent", back_populates="asset")
+    fraction_holdings = relationship("FractionHolding", back_populates="asset")
 
 
 class CustodyEvent(Base):
@@ -78,4 +83,30 @@ class InvitationToken(Base):
     id = Column(Integer, primary_key=True, index=True)
     token = Column(String(64), unique=True, nullable=False)
     used = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class FractionHolding(Base):
+    __tablename__ = "fraction_holdings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("assets.id"), nullable=False)
+    holder_address = Column(String(42), nullable=False)
+    holder_label = Column(String(255), nullable=True)
+    fraction_amount = Column(Integer, nullable=False)
+    percentage = Column(Float, nullable=False)
+    acquired_at = Column(DateTime, default=datetime.utcnow)
+
+    asset = relationship("Asset", back_populates="fraction_holdings")
+
+
+class KYCRecord(Base):
+    __tablename__ = "kyc_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    wallet_address = Column(String(42), unique=True, nullable=False)
+    status = Column(String(50), default="PENDING")  # PENDING, VERIFIED, REJECTED
+    verification_level = Column(Integer, default=0)  # 0=none, 1=basic, 2=enhanced
+    country_code = Column(String(3), nullable=True)
+    verified_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

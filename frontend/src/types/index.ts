@@ -17,8 +17,28 @@ export interface Asset {
   fingerprint_hash: string | null;
   verification: string;
   chain_tx_hash: string | null;
+  is_fractionalized: boolean;
+  fraction_count: number | null;
+  fractions_tx_hash: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface FractionHolding {
+  id: number;
+  asset_id: number;
+  holder_address: string;
+  holder_label: string | null;
+  fraction_amount: number;
+  percentage: number;
+  acquired_at: string;
+}
+
+export interface KYCRecord {
+  wallet_address: string;
+  status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  verification_level: number;
+  verified_at: string | null;
 }
 
 export interface CustodyEvent {

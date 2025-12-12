@@ -18,11 +18,12 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from .database import engine, get_db, Base
-from .models import Asset, CustodyEvent, SettlementEvent, InvitationToken
+from .models import Asset, CustodyEvent, SettlementEvent, InvitationToken, FractionHolding, KYCRecord
 from .schemas import (
     AssetCreate, AssetResponse, CustodyEventResponse,
     SettlementEventCreate, SettlementEventResponse,
-    InvitationValidate, InvitationResponse, SINCResult
+    InvitationValidate, InvitationResponse, SINCResult,
+    FractionHoldingResponse, FractionalizeRequest, KYCSubmit, KYCResponse
 )
 from .blockchain import registry as blockchain_registry
 
@@ -288,6 +289,166 @@ async def create_invitation_token(
     db.commit()
 
     return {"token": token}
+
+
+# ============================================
+# Fractional Ownership Endpoints
+# ============================================
+
+@app.post("/api/assets/{asset_id}/fractionalize", response_model=AssetResponse)
+async def fractionalize_asset(
+    asset_id: int,
+    data: FractionalizeRequest,
+    db: Session = Depends(get_db),
+    _: str = Depends(validate_invitation)
+):
+    """Fractionalize an asset into multiple shares."""
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    if asset.is_fractionalized:
+        raise HTTPException(status_code=400, detail="Asset already fractionalized")
+
+    if asset.clearance_status != "CLEARED":
+        raise HTTPException(status_code=400, detail="Asset must be cleared before fractionalization")
+
+    # Update asset
+    asset.is_fractionalized = 1
+    asset.fraction_count = data.fraction_count
+
+    # Create initial holding (100% to vault)
+    holding = FractionHolding(
+        asset_id=asset.id,
+        holder_address="0x0000000000000000000000000000000000000000",
+        holder_label="Vault",
+        fraction_amount=data.fraction_count,
+        percentage=100.0
+    )
+    db.add(holding)
+
+    # TODO: Call blockchain contract to fractionalize
+    # This would call IssuanceFractions.fractionalizeAsset()
+
+    db.commit()
+    db.refresh(asset)
+
+    return asset
+
+
+@app.get("/api/assets/{asset_id}/fractions", response_model=List[FractionHoldingResponse])
+async def get_fraction_holdings(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(validate_invitation)
+):
+    """Get all fraction holdings for an asset."""
+    holdings = db.query(FractionHolding).filter(
+        FractionHolding.asset_id == asset_id
+    ).order_by(FractionHolding.percentage.desc()).all()
+
+    return holdings
+
+
+# ============================================
+# KYC/AML Endpoints
+# ============================================
+
+# Restricted countries for compliance
+RESTRICTED_COUNTRIES = {"KP", "IR", "CU", "SY", "RU"}  # North Korea, Iran, Cuba, Syria, Russia
+
+@app.post("/api/kyc/submit", response_model=KYCResponse)
+async def submit_kyc(
+    data: KYCSubmit,
+    db: Session = Depends(get_db),
+    _: str = Depends(validate_invitation)
+):
+    """Submit KYC verification request."""
+    # Check for restricted countries
+    if data.country_code.upper() in RESTRICTED_COUNTRIES:
+        raise HTTPException(
+            status_code=403,
+            detail="Service not available in your jurisdiction"
+        )
+
+    # Check existing record
+    existing = db.query(KYCRecord).filter(
+        KYCRecord.wallet_address == data.wallet_address.lower()
+    ).first()
+
+    if existing:
+        return existing
+
+    # Create new KYC record (in production, this would trigger external verification)
+    kyc_record = KYCRecord(
+        wallet_address=data.wallet_address.lower(),
+        country_code=data.country_code.upper(),
+        status="PENDING",
+        verification_level=0
+    )
+    db.add(kyc_record)
+    db.commit()
+    db.refresh(kyc_record)
+
+    return kyc_record
+
+
+@app.get("/api/kyc/{wallet_address}", response_model=KYCResponse)
+async def get_kyc_status(
+    wallet_address: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(validate_invitation)
+):
+    """Get KYC status for a wallet address."""
+    record = db.query(KYCRecord).filter(
+        KYCRecord.wallet_address == wallet_address.lower()
+    ).first()
+
+    if not record:
+        raise HTTPException(status_code=404, detail="KYC record not found")
+
+    return record
+
+
+@app.post("/api/kyc/{wallet_address}/verify")
+async def verify_kyc(
+    wallet_address: str,
+    verification_level: int = 1,
+    db: Session = Depends(get_db),
+    _: str = Depends(validate_invitation)
+):
+    """Admin endpoint to verify KYC (in production, this would be automated)."""
+    record = db.query(KYCRecord).filter(
+        KYCRecord.wallet_address == wallet_address.lower()
+    ).first()
+
+    if not record:
+        raise HTTPException(status_code=404, detail="KYC record not found")
+
+    record.status = "VERIFIED"
+    record.verification_level = verification_level
+    record.verified_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(record)
+
+    return {"message": "KYC verified", "wallet_address": wallet_address}
+
+
+def check_kyc_required(asset: Asset, transaction_value: float = 0) -> bool:
+    """Check if KYC is required for a transaction."""
+    # KYC required for:
+    # - Fractionalized assets
+    # - High-value transactions (> $10,000 equivalent)
+    # - Certain settlement rules
+    HIGH_VALUE_THRESHOLD = 10000.0
+
+    if asset.is_fractionalized:
+        return True
+    if transaction_value > HIGH_VALUE_THRESHOLD:
+        return True
+
+    return False
 
 
 if __name__ == "__main__":
